@@ -1,0 +1,1662 @@
+<title>FA→RE Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Convert any FA (DFA or NFA) to a Regular Expression using the State Elimination method. Step-by-step GNFA construction, elimination order, and final regex derivation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: definition panel left; center GNFA canvas; right tabbed analysis panel */
+:root{
+  --bg:#F2F4F8; --surface:#FFFFFF; --surface-2:#E9EDF4; --line:#D6DCE6; --line-2:#BFC8D6;
+  --ink:#121826; --ink-2:#465166; --ink-3:#6E7990;
+  --canvas:#FBFCFE; --dot:#D5DBE6; --edge:#5F6B82;
+  --fa:#0B7A6F; --fa-soft:#D3EFEA;
+  --re:#7C3AED; --re-soft:#EDE9FE;
+  --hot:#C95F05; --hot-soft:#FFE6CC;
+  --ok:#157A3A; --ok-soft:#DCF2E3; --bad:#B93228; --bad-soft:#FBE3E0; --warn:#8A5B00; --warn-soft:#FBF0D2;
+  --focus:#7C3AED;
+  --shadow:0 1px 2px rgba(18,24,38,.05), 0 6px 20px rgba(18,24,38,.04);
+  --font-display:"Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body:"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1017; --surface:#131924; --surface-2:#1B2230; --line:#263042; --line-2:#36435A;
+    --ink:#E7EBF3; --ink-2:#AAB4C6; --ink-3:#7D899F;
+    --canvas:#0F141D; --dot:#242D3C; --edge:#8D98AD;
+    --fa:#3CC8B7; --fa-soft:#0F302C; --re:#A78BFA; --re-soft:#2D1B69;
+    --hot:#FFA040; --hot-soft:#3D250F;
+    --ok:#52D98B; --ok-soft:#10301E; --bad:#FF7F75; --bad-soft:#3A1614; --warn:#E8B64A; --warn-soft:#33270B;
+    --focus:#A78BFA; --shadow:0 1px 2px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1017; --surface:#131924; --surface-2:#1B2230; --line:#263042; --line-2:#36435A;
+  --ink:#E7EBF3; --ink-2:#AAB4C6; --ink-3:#7D899F;
+  --canvas:#0F141D; --dot:#242D3C; --edge:#8D98AD;
+  --fa:#3CC8B7; --fa-soft:#0F302C; --re:#A78BFA; --re-soft:#2D1B69;
+  --hot:#FFA040; --hot-soft:#3D250F;
+  --ok:#52D98B; --ok-soft:#10301E; --bad:#FF7F75; --bad-soft:#3A1614; --warn:#E8B64A; --warn-soft:#33270B;
+  --focus:#A78BFA; --shadow:0 1px 2px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 14px/1.5 var(--font-body)}
+h1,h2,h3,h4{font-family:var(--font-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+code,.mono{font-family:var(--font-mono)}
+a{color:var(--re)}
+.wrap{max-width:1500px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* top bar */
+.topbar{background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:12px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand svg{flex:none}
+.brand h1{font-size:20px;font-weight:700;line-height:1.15}
+.brand p{margin:1px 0 0;color:var(--ink-3);font-size:13px}
+.top-actions{display:flex;gap:8px;align-items:center}
+
+/* controls */
+button{font:500 13px/1 var(--font-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:0 11px;min-height:32px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+button:hover{border-color:var(--line-2);background:var(--surface-2)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+button.primary:hover{opacity:.9;background:var(--ink)}
+button.icon{width:32px;padding:0}
+button svg{width:16px;height:16px;flex:none}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+input[type="text"],input:not([type]),textarea,select{font:400 14px/1.4 var(--font-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;width:100%;min-width:0}
+input.mono,textarea.mono{font-family:var(--font-mono);font-size:13px}
+input:focus,textarea:focus,select:focus{border-color:var(--focus);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 18%,transparent)}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:28px;cursor:pointer}
+textarea{resize:vertical;min-height:120px}
+input[type="checkbox"],input[type="radio"]{accent-color:var(--re);width:16px;height:16px;margin:0;cursor:pointer}
+label.check{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-2);cursor:pointer;user-select:none}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field>label,.lbl-sm{font:600 11px/1.2 var(--font-body);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.hint{font-size:12.5px;color:var(--ink-3);margin:0}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:9px;padding:3px;gap:2px;max-width:100%}
+.seg button{border:0;background:transparent;min-height:28px;padding:0 12px;color:var(--ink-2);border-radius:7px;font-weight:600}
+.seg button:hover{background:color-mix(in srgb,var(--surface) 55%,transparent)}
+.seg button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+/* layout: < 1041px one col; 1041–1359px two col; ≥ 1360px three col */
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;padding-block:18px 28px;align-items:start}
+.work{display:flex;flex-direction:column;gap:16px;min-width:0;container-type:inline-size}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);min-width:0}
+.analysis{display:flex;flex-direction:column;min-width:0;container-type:inline-size}
+@media (min-width:1041px){
+  .layout{grid-template-columns:minmax(290px,350px) minmax(0,1fr)}
+  aside.define{grid-row:span 2}
+  .analysis{grid-column:2}
+}
+@media (min-width:1360px){
+  .layout{grid-template-columns:minmax(290px,330px) minmax(0,1fr) minmax(390px,470px)}
+  aside.define{grid-row:auto}
+  .analysis{grid-column:auto;position:sticky;top:16px;max-height:calc(100vh - 32px)}
+  .analysis .tab-body{overflow-y:auto;min-height:0;flex:1 1 auto}
+  .graphs{order:-1}
+  .graphs .canvas{height:max(300px,calc(100vh - 240px))}
+}
+
+/* definition panel */
+.define{padding:16px;display:flex;flex-direction:column;gap:14px}
+.define-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.define-head h2{font-size:16px}
+.tuple{font:500 13px var(--font-mono);color:var(--ink-3)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.edit-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table.edit{border-collapse:collapse;width:100%;font-size:13px}
+table.edit th,table.edit td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}
+table.edit tr:last-child>*{border-bottom:0}
+table.edit thead th{font:600 10.5px var(--font-body);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2);white-space:nowrap}
+table.edit thead th.sym{font:700 13px var(--font-mono);text-transform:none;letter-spacing:0;color:var(--ink-2)}
+table.edit td.c{text-align:center;width:42px}
+table.edit th.q{font:600 13px var(--font-mono);white-space:nowrap}
+table.edit input.cell{font:500 13px var(--font-mono);padding:5px 7px;min-width:60px;border-radius:6px}
+table.edit input.cell.invalid{border-color:var(--bad);background:var(--bad-soft)}
+.msgs{display:flex;flex-direction:column;gap:6px}
+.msg{font-size:13px;padding:8px 10px;border-radius:8px;border:1px solid transparent}
+.msg.err{background:var(--bad-soft);color:var(--bad);border-color:color-mix(in srgb,var(--bad) 25%,transparent)}
+.msg.warn{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 25%,transparent)}
+.msg.ok{background:var(--ok-soft);color:var(--ok)}
+details.help{font-size:13px;color:var(--ink-2)}
+details.help summary{cursor:pointer;font-weight:600;color:var(--ink-2)}
+details.help pre{background:var(--surface-2);border-radius:8px;padding:10px;font:12.5px/1.55 var(--font-mono);overflow-x:auto;margin:8px 0 0}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* pipeline summary */
+.pipeline{padding:14px;display:flex;flex-direction:column;gap:12px}
+.pipe{display:flex;align-items:stretch;flex-wrap:wrap;row-gap:10px}
+.pstage{--sc:var(--re);display:flex;flex-direction:column;gap:2px;padding:10px 14px;border-radius:10px;background:var(--surface-2);flex:1 1 0;min-width:0;border:1.5px solid transparent}
+.pstage .k{font:700 11px var(--font-mono);letter-spacing:.06em;color:var(--sc)}
+.pstage .v{font:600 26px/1.05 var(--font-display);font-variant-numeric:tabular-nums}
+.pstage .v small{font:500 13px var(--font-body);color:var(--ink-3);margin-left:5px}
+.pstage .d{font-size:12px;color:var(--ink-3);overflow-wrap:anywhere}
+.pstage.fa{--sc:var(--fa);background:var(--fa-soft)}
+.pstage.re{background:var(--re-soft)}
+.pstage.gnfa{background:var(--surface);border-color:var(--re)}
+.parrow{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0 8px;min-width:86px;flex:0 0 auto;color:var(--ink-3);font-size:11px;line-height:1.25;text-align:center}
+.parrow svg{width:44px;height:10px}
+@container (max-width:760px){
+  .parrow{min-width:34px;padding:0 3px}
+  .parrow .pl{display:none}
+  .parrow svg{width:26px}
+  .pstage{padding:8px 10px}
+  .pstage .v{font-size:22px}
+}
+.chip{font:500 12.5px var(--font-mono);padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink)}
+
+/* graph canvas */
+.graphs{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.graph-card{display:flex;flex-direction:column;overflow:hidden}
+.graph-card.is-fa{--g:var(--fa);--g-soft:var(--fa-soft)}
+.graph-card.is-gnfa{--g:var(--re);--g-soft:var(--re-soft)}
+.gc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;flex-wrap:wrap}
+.gc-title{display:flex;align-items:baseline;gap:8px;min-width:0}
+.gc-title h3{font-size:15px}
+.tag{font:700 11px var(--font-mono);letter-spacing:.04em;color:var(--g);background:var(--g-soft);padding:3px 7px;border-radius:6px}
+.gc-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.canvas{position:relative;height:clamp(300px,45vh,520px);background-color:var(--canvas);background-image:radial-gradient(var(--dot) 1.1px,transparent 1.3px);background-size:20px 20px;border-block:1px solid var(--line)}
+.canvas svg{display:block;width:100%;height:100%;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.canvas svg.panning{cursor:grabbing}
+.cap{position:absolute;left:10px;bottom:10px;width:fit-content;max-width:calc(100% - 20px);background:color-mix(in srgb,var(--surface) 92%,transparent);border:1px solid var(--line);border-radius:9px;padding:6px 10px;font:500 12.5px/1.45 var(--font-mono);color:var(--ink-2);box-shadow:var(--shadow);pointer-events:none;overflow-wrap:anywhere}
+.cap b{color:var(--ink);font-weight:700}
+.cap .hot{color:var(--hot);font-weight:700}
+.cap .ok{color:var(--ok);font-weight:700}.cap .bad{color:var(--bad);font-weight:700}
+.graph-card.expanded{position:fixed;z-index:40;top:calc(12px + env(safe-area-inset-top,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.graph-card.expanded .canvas{height:auto;flex:1 1 auto;min-height:0}
+.backdrop{position:fixed;inset:0;z-index:39;background:color-mix(in srgb,var(--bg) 72%,transparent);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.canvas .empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--ink-3);font-size:13px;text-align:center;padding:20px}
+.gc-foot{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:9px 12px;font-size:12.5px;color:var(--ink-3)}
+
+/* svg graph */
+.node{cursor:grab;touch-action:none}
+.node.dragging{cursor:grabbing}
+.node .outer{fill:var(--surface);stroke:var(--g);stroke-width:2}
+.node .inner{fill:none;stroke:var(--g);stroke-width:1.6}
+.node .nl{font:600 14px var(--font-mono);fill:var(--ink);text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.node .ns{font:500 11px var(--font-mono);fill:var(--ink-3);text-anchor:middle;dominant-baseline:hanging;paint-order:stroke;stroke:var(--canvas);stroke-width:4px;stroke-linejoin:round;pointer-events:none}
+.node.being-eliminated .outer{fill:var(--hot-soft);stroke:var(--hot);stroke-width:3;stroke-dasharray:5 3}
+.node.being-eliminated .nl{fill:var(--hot)}
+.node.special .outer{fill:var(--surface-2);stroke:var(--ink-3);stroke-dasharray:4 3}
+.node.special .nl{fill:var(--ink-3)}
+.node.target .outer{fill:var(--g-soft);stroke-width:3}
+.node.active .outer{fill:var(--hot-soft);stroke:var(--hot);stroke-width:3}
+.edge path{fill:none;stroke:var(--edge);stroke-width:1.6}
+.edge text{font:500 12px var(--font-mono);fill:var(--ink-2);text-anchor:middle;dominant-baseline:central;paint-order:stroke;stroke:var(--canvas);stroke-width:5px;stroke-linejoin:round}
+.edge.elim path{stroke:var(--hot);stroke-width:2.4;stroke-dasharray:7 4;animation:flow .8s linear infinite}
+.edge.elim text{fill:var(--hot);font-weight:700}
+.edge.updated path{stroke:var(--re);stroke-width:2.2}
+.edge.updated text{fill:var(--re);font-weight:700}
+@keyframes flow{to{stroke-dashoffset:-22}}
+.start-arrow{fill:none;stroke:var(--ink-2);stroke-width:1.8}
+.mk{fill:var(--edge)}.mk-hot{fill:var(--hot)}.mk-start{fill:var(--ink-2)}.mk-re{fill:var(--re)}
+.node,.edge{transition:opacity .25s ease}
+@media (prefers-reduced-motion:reduce){.node,.edge{transition:none}.edge.elim path{animation:none}}
+
+/* tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 10px;overflow-x:auto;scrollbar-width:thin}
+.tabs button{border:0;border-radius:0;background:none;border-bottom:2px solid transparent;padding:0 12px;min-height:46px;color:var(--ink-3);font-weight:600;font-size:13.5px}
+.tabs button:hover{color:var(--ink);background:none}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.tab-body{padding:16px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.tab-body h4{font-size:14px}
+.lede{margin:0;color:var(--ink-2);max-width:78ch}
+
+.table-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--line);border-radius:10px}
+table.data{border-collapse:collapse;font:500 13px var(--font-mono);width:100%}
+table.data th,table.data td{padding:7px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}
+table.data tr:last-child>*{border-bottom:0}
+table.data thead th{font:600 10.5px var(--font-body);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2)}
+table.data td.muted,table.data .muted{color:var(--ink-3)}
+
+/* player */
+.player{display:flex;flex-direction:column;gap:12px}
+.player-ctrls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.player-ctrls input[type="range"]{flex:1 1 160px;accent-color:var(--re);min-width:120px}
+.counter{font:600 13px var(--font-mono);color:var(--ink-2);min-width:9ch;text-align:right}
+.explain{background:var(--surface-2);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.65;min-width:0;overflow-wrap:anywhere}
+.explain .eq{font:500 13px/1.7 var(--font-mono);display:block;overflow-wrap:anywhere}
+.explain .re-result{font:700 15px/1.6 var(--font-mono);color:var(--re);display:block;overflow-wrap:anywhere;padding:4px 0}
+.explain b{font-weight:600}
+.explain .k{color:var(--ink-3);display:inline-block;min-width:10ch}
+.step-head{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;margin-bottom:10px}
+.sbadge{font:700 15px var(--font-mono);min-width:36px;height:36px;padding:0 9px;border-radius:999px;display:inline-grid;place-items:center;border:2px solid var(--re);background:var(--surface);color:var(--ink)}
+.sbadge.elim{border-color:var(--hot);background:var(--hot-soft)}
+.sbadge.special{border-style:dashed;border-color:var(--ink-3);color:var(--ink-3)}
+.sarrow{display:inline-flex;flex-direction:column;align-items:center;font:700 13px/1 var(--font-mono);color:var(--hot);gap:2px}
+.sarrow svg{width:44px;height:10px}
+
+/* RE display */
+.re-box{background:var(--re-soft);border:1.5px solid color-mix(in srgb,var(--re) 35%,transparent);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.re-box .re-label{font:600 11px var(--font-body);letter-spacing:.07em;text-transform:uppercase;color:var(--re)}
+.re-box .re-expr{font:600 16px/1.5 var(--font-mono);color:var(--ink);overflow-wrap:anywhere;word-break:break-all}
+.re-box .re-expr.empty{color:var(--ink-3);font-weight:400;font-size:14px}
+.copy-btn{align-self:flex-start}
+
+/* step list in Elimination tab */
+.elim-steps{display:flex;flex-direction:column;gap:8px;list-style:none;margin:0;padding:0}
+.elim-step{padding:10px 12px;border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;gap:4px}
+.elim-step.current{border-color:var(--hot);background:var(--hot-soft)}
+.elim-step.done{opacity:.5}
+.elim-step .est{font:600 12px var(--font-body);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+.elim-step .enode{font:700 14px var(--font-mono);color:var(--hot)}
+.elim-step .eupd{font:500 12px var(--font-mono);color:var(--ink-2);overflow-wrap:anywhere}
+
+/* gnfa table */
+.gnfa-tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table.gnfa-tbl{border-collapse:collapse;font:500 12.5px var(--font-mono);width:100%}
+table.gnfa-tbl th,table.gnfa-tbl td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+table.gnfa-tbl tr:last-child>*{border-bottom:0}
+table.gnfa-tbl thead th{font:600 10px var(--font-body);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2)}
+table.gnfa-tbl .elim-row td,table.gnfa-tbl .elim-col{opacity:.4}
+table.gnfa-tbl .updated{color:var(--re);font-weight:700}
+
+/* formal */
+dl.formal{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px;margin:0;font:500 13.5px/1.6 var(--font-mono)}
+dl.formal dt{color:var(--ink-3)}
+dl.formal dd{margin:0;overflow-wrap:anywhere}
+.formal-block{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line);border-radius:10px}
+.formal-block h4 .tag{margin-right:6px}
+
+.foot{padding-block:4px 32px;color:var(--ink-3);font-size:12.5px;display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20;max-width:calc(100% - 32px)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width:520px){
+  .brand p{display:none}
+  .row2{grid-template-columns:1fr}
+}
+</style>
+
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <div class="brand">
+      <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true">
+        <rect x="0.5" y="0.5" width="37" height="37" rx="9" fill="var(--surface-2)" stroke="var(--line)"/>
+        <!-- FA circle on left -->
+        <circle cx="11" cy="19" r="5.5" fill="none" stroke="var(--fa)" stroke-width="2"/>
+        <circle cx="11" cy="19" r="3" fill="none" stroke="var(--fa)" stroke-width="1.3"/>
+        <!-- arrow -->
+        <path d="M17 19h4" stroke="var(--ink-2)" stroke-width="1.6"/>
+        <path d="M19.8 16.5 22.2 19l-2.4 2.5" fill="none" stroke="var(--ink-2)" stroke-width="1.6"/>
+        <!-- RE text on right -->
+        <text x="27" y="23" font-size="10" font-family="monospace" font-weight="700" fill="var(--re)" text-anchor="middle">RE</text>
+      </svg>
+      <div>
+        <h1>FA→RE Studio</h1>
+        <p>State elimination method: convert any FA to a Regular Expression</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="btn-theme" type="button" aria-label="Switch colour theme" title="Theme: system">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg>
+        <span id="theme-label">Auto</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap layout">
+  <!-- ================= Definition panel ================= -->
+  <aside class="card define" aria-label="Define the FA">
+    <div class="define-head">
+      <div>
+        <h2>Define the FA</h2>
+        <div class="tuple">M = (Q, Σ, δ, q₀, F)</div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="preset">Load an example</label>
+      <select id="preset"></select>
+    </div>
+    <div class="seg" role="tablist" aria-label="Input method" id="input-tabs">
+      <button type="button" role="tab" aria-selected="true" data-tab="table" id="it-table">Table</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="text" id="it-text">Text</button>
+    </div>
+
+    <section id="in-table" class="define" style="padding:0" aria-labelledby="it-table">
+      <div class="row2">
+        <div class="field"><label for="in-states">States (Q)</label><input id="in-states" class="mono" autocomplete="off" spellcheck="false" placeholder="q0, q1, q2"></div>
+        <div class="field"><label for="in-alpha">Alphabet (Σ)</label><input id="in-alpha" class="mono" autocomplete="off" spellcheck="false" placeholder="a, b"></div>
+      </div>
+      <div class="edit-wrap"><table class="edit" id="ed-table"></table></div>
+      <p class="hint">Type a single target state per cell. Leave empty for no transition (∅).</p>
+    </section>
+
+    <section id="in-text" hidden aria-labelledby="it-text" class="define" style="padding:0">
+      <div class="field">
+        <label for="txt-def">FA in text form</label>
+        <textarea id="txt-def" class="mono" rows="12" spellcheck="false" autocomplete="off"></textarea>
+      </div>
+      <div id="txt-msg" class="msg ok" hidden></div>
+      <div class="btn-row">
+        <button type="button" id="txt-copy">Copy text</button>
+        <button type="button" id="txt-json">Copy as JSON</button>
+      </div>
+      <details class="help">
+        <summary>Text format</summary>
+<pre># lines starting with # are comments
+states: q0, q1, q2      (optional, inferred)
+alphabet: a, b          (optional, inferred)
+start: q0
+final: q2
+q0 a -> q1
+q0 b -> q0
+q1 a -> q2
+q1 b -> q0</pre>
+      </details>
+    </section>
+
+    <div class="field">
+      <label for="elim-order">Elimination order</label>
+      <select id="elim-order">
+        <option value="auto">Auto (heuristic: fewest connections first)</option>
+        <option value="natural">Natural (q0, q1, q2 … except start/final)</option>
+        <option value="reverse">Reverse (last state first)</option>
+      </select>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" class="primary" id="btn-convert">Convert to RE</button>
+      <button type="button" id="btn-reset-fa">Reset</button>
+    </div>
+
+    <div class="msgs" id="msgs" aria-live="polite"></div>
+  </aside>
+
+  <!-- ================= Work area ================= -->
+  <section class="work" aria-label="Results">
+    <div class="card pipeline" id="summary" aria-live="polite"></div>
+
+    <div class="graphs">
+      <article class="card graph-card is-gnfa">
+        <div class="gc-head">
+          <div class="gc-title"><span class="tag" id="gnfa-tag">GNFA</span><h3 id="gnfa-title">Generalised NFA</h3></div>
+          <div class="gc-tools" id="gnfa-tools"></div>
+        </div>
+        <div class="canvas"><svg id="svg-gnfa" role="img" aria-label="GNFA state diagram"></svg><div class="cap" hidden></div></div>
+        <div class="gc-foot">
+          <div id="gnfa-legend" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink-3)">
+            <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:0;border-top:2px dashed var(--hot);display:inline-block"></span> being eliminated</span>
+            <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:0;border-top:2px solid var(--re);display:inline-block"></span> updated edge</span>
+          </div>
+          <span>Drag states to rearrange</span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="card analysis" aria-label="Analysis">
+    <nav class="tabs" role="tablist" aria-label="Analysis" id="main-tabs">
+      <button type="button" role="tab" aria-selected="true" data-tab="steps">Steps</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="gnfa-tbl">GNFA Table</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="result">Result</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="formal">Formal</button>
+    </nav>
+
+    <div class="tab-body" id="tab-steps" role="tabpanel">
+      <p class="lede">The state elimination method builds a GNFA with a new start state s<sub>new</sub> and a new accept state f<sub>new</sub>. It then eliminates one interior state at a time, updating every bypassing edge's label with a combined regex. The last edge gives the final RE.</p>
+      <div class="player">
+        <div class="player-ctrls">
+          <button type="button" class="icon" id="st-first" aria-label="First step"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 3h2v10H3zM13 3v10L6 8z"/></svg></button>
+          <button type="button" class="icon" id="st-prev" aria-label="Previous step"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M11 3v10L4 8z"/></svg></button>
+          <button type="button" id="st-play" class="primary" aria-label="Play elimination"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11L13 8z"/></svg><span>Play</span></button>
+          <button type="button" class="icon" id="st-next" aria-label="Next step"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3v10l7-5z"/></svg></button>
+          <button type="button" class="icon" id="st-last" aria-label="Last step"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M11 3h2v10h-2zM3 3v10l7-5z"/></svg></button>
+          <input type="range" id="st-range" min="0" max="0" value="0" aria-label="Elimination step">
+          <span class="counter" id="st-count">0 / 0</span>
+        </div>
+        <p class="hint">Keyboard: ← → to step, Space to play/pause. Expand diagram to fullscreen.</p>
+        <div class="explain" id="st-explain"></div>
+      </div>
+      <ul class="elim-steps" id="elim-steps-list"></ul>
+    </div>
+
+    <div class="tab-body" id="tab-gnfa-tbl" role="tabpanel" hidden>
+      <p class="lede">Each cell shows the regex label R(i,j) on the GNFA edge from state i to state j. When state q<sub>rip</sub> is eliminated, the formula R(i,j) ← R(i,j) | R(i,rip) · R(rip,rip)* · R(rip,j) is applied for all remaining i, j pairs.</p>
+      <div id="gnfa-table-container"></div>
+    </div>
+
+    <div class="tab-body" id="tab-result" role="tabpanel" hidden>
+      <p class="lede">The final regular expression equivalent to the input FA, derived by state elimination on the GNFA.</p>
+      <div class="re-box" id="re-result-box">
+        <span class="re-label">Regular Expression</span>
+        <span class="re-expr empty" id="re-expr">Run the conversion first</span>
+      </div>
+      <div class="btn-row">
+        <button type="button" id="copy-re">Copy RE</button>
+        <button type="button" id="copy-re-clean">Copy (simplified)</button>
+      </div>
+      <div class="field" style="margin-top:8px">
+        <span class="lbl-sm">Elimination trace</span>
+        <div class="table-wrap">
+          <table class="data" id="trace-table">
+            <thead><tr><th>#</th><th>Eliminate</th><th>Edges updated</th><th>GNFA states</th></tr></thead>
+            <tbody id="trace-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-body" id="tab-formal" role="tabpanel" hidden>
+      <div id="formal-out"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <span>Algorithm: State Elimination on GNFA · Arden's Lemma form · Regex simplification.</span>
+  <span>Runs entirely in your browser. Your last FA is kept on this device.</span>
+</footer>
+<div class="backdrop" id="backdrop" hidden></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const SVGNS = 'http://www.w3.org/2000/svg';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const uniq = a => [...new Set(a)];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const parseList = s => String(s || '').split(/[\s,;{}]+/).map(x => x.trim()).filter(Boolean);
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+function recall(key) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+const embedded = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+
+/* =====================================================================
+   Regex helpers for GNFA labels
+   ===================================================================== */
+const NULL_RE = '∅';   // empty set (no path)
+const EPS_RE  = 'ε';   // empty string
+
+function isNull(r) { return r === NULL_RE || r === '' || r === null || r === undefined; }
+function isEps(r)  { return r === EPS_RE || r === 'eps' || r === 'epsilon'; }
+
+// Parenthesise if needed for concatenation context
+function parenForConcat(r) {
+  if (isNull(r) || isEps(r)) return r;
+  if (needsParenForConcat(r)) return '(' + r + ')';
+  return r;
+}
+function needsParenForConcat(r) {
+  // needs parens if top-level has union at root
+  let depth = 0;
+  for (const c of r) {
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === '|' && depth === 0) return true;
+  }
+  return false;
+}
+function parenForStar(r) {
+  if (isNull(r) || isEps(r)) return r;
+  if ([...r].length === 1) return r;
+  return '(' + r + ')';
+}
+
+// RE simplification rules
+function reUnion(a, b) {
+  if (isNull(a) && isNull(b)) return NULL_RE;
+  if (isNull(a)) return b;
+  if (isNull(b)) return a;
+  if (a === b)   return a;
+  return a + '|' + b;
+}
+function reConcat(a, b) {
+  if (isNull(a) || isNull(b)) return NULL_RE;
+  if (isEps(a)) return b;
+  if (isEps(b)) return a;
+  return parenForConcat(a) + parenForConcat(b);
+}
+function reStar(r) {
+  if (isNull(r) || isEps(r)) return EPS_RE;
+  if (r.endsWith('*') && !needsParenForConcat(r.slice(0, -1))) return r; // already starred
+  return parenForStar(r) + '*';
+}
+// Apply elimination formula: R(i,j) = R(i,j) | R(i,rip).R(rip,rip)*.R(rip,j)
+function applyElim(rij, ri_rip, r_rip_rip, r_rip_j) {
+  if (isNull(ri_rip) || isNull(r_rip_j)) return rij; // no path through rip
+  const loop = reStar(r_rip_rip);
+  const bypass = reConcat(reConcat(ri_rip, loop), r_rip_j);
+  return reUnion(rij, bypass);
+}
+
+// Light simplification: drop redundant grouping, but never strip parens
+// required by a following Kleene star (e.g. keep (aaa)* — not aaa*).
+function simplify(r) {
+  if (isNull(r)) return NULL_RE;
+  let prev = '';
+  let s = r;
+  while (s !== prev) {
+    prev = s;
+    s = s.replace(/\(([^()]+)\)(?!\*)/g, (_, inner) => {
+      if (!needsParenForConcat(inner)) return inner;
+      return '(' + inner + ')';
+    });
+    s = s.replace(/\(ε\)/g, 'ε');
+    s = s.replace(/\(∅\)/g, '∅');
+  }
+  return s;
+}
+
+/* =====================================================================
+   FA model
+   ===================================================================== */
+function normalizeFA(m) {
+  const states = uniq((m.states || []).map(s => String(s).trim()).filter(Boolean));
+  const alphabet = uniq((m.alphabet || []).map(s => String(s).trim()).filter(Boolean));
+  const S = new Set(states);
+  const trans = {};
+  for (const q of states) {
+    trans[q] = {};
+    for (const a of alphabet) {
+      const src = ((m.trans || {})[q] || {})[a];
+      if (Array.isArray(src)) trans[q][a] = src.filter(x => S.has(x));
+      else if (src && S.has(src)) trans[q][a] = [src];
+      else trans[q][a] = [];
+    }
+  }
+  const acc = new Set(m.accept || []);
+  return {
+    states, alphabet, trans,
+    start: S.has(m.start) ? m.start : (states[0] ?? null),
+    accept: states.filter(s => acc.has(s)),
+  };
+}
+
+/* =====================================================================
+   Text parser (same style as NFA→DFA studio)
+   ===================================================================== */
+function parseTextDef(raw) {
+  const lines = raw.split('\n').map(l => l.replace(/#.*/,'').trim()).filter(Boolean);
+  const m = { states: [], alphabet: [], trans: {}, start: null, accept: [] };
+  for (const line of lines) {
+    if (/^states\s*:/i.test(line))   { m.states   = parseList(line.replace(/^states\s*:/i,'')); continue; }
+    if (/^alphabet\s*:/i.test(line)) { m.alphabet  = parseList(line.replace(/^alphabet\s*:/i,'')); continue; }
+    if (/^start\s*:/i.test(line))    { m.start     = parseList(line.replace(/^start\s*:/i,''))[0] || null; continue; }
+    if (/^final\s*:/i.test(line) || /^accept\s*:/i.test(line)) {
+      m.accept = parseList(line.replace(/^(final|accept)\s*:/i,'')); continue;
+    }
+    // transition: q0 a -> q1
+    const mt = line.match(/^(\S+)\s+(\S+)\s*->\s*(.*)$/);
+    if (mt) {
+      const [, from, sym, toRaw] = mt;
+      const tos = parseList(toRaw);
+      if (!m.trans[from]) m.trans[from] = {};
+      m.trans[from][sym] = tos;
+      if (!m.states.includes(from)) m.states.push(from);
+      tos.forEach(t => { if (!m.states.includes(t)) m.states.push(t); });
+      if (!m.alphabet.includes(sym)) m.alphabet.push(sym);
+    }
+  }
+  return m;
+}
+
+function faToText(m) {
+  const lines = [];
+  lines.push('states: ' + m.states.join(', '));
+  lines.push('alphabet: ' + m.alphabet.join(', '));
+  lines.push('start: ' + m.start);
+  lines.push('final: ' + m.accept.join(', '));
+  for (const q of m.states) {
+    for (const a of m.alphabet) {
+      const tos = (m.trans[q] || {})[a] || [];
+      if (tos.length) lines.push(`${q} ${a} -> ${tos.join(', ')}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/* =====================================================================
+   GNFA construction & State Elimination
+   ===================================================================== */
+const S_NEW = 'qs';  // new start
+const F_NEW = 'qf';  // new final
+
+function buildGNFA(fa) {
+  // States: S_NEW, all FA states, F_NEW
+  const gnfaStates = [S_NEW, ...fa.states, F_NEW];
+  // R[i][j] = regex label (or NULL_RE if none)
+  const R = {};
+  for (const p of gnfaStates) { R[p] = {}; for (const q of gnfaStates) R[p][q] = NULL_RE; }
+
+  // ε from S_NEW to FA start
+  R[S_NEW][fa.start] = EPS_RE;
+  // ε from each FA accept to F_NEW
+  for (const f of fa.accept) R[f][F_NEW] = EPS_RE;
+  // FA transitions
+  for (const q of fa.states) {
+    for (const a of fa.alphabet) {
+      const tos = fa.trans[q][a] || [];
+      for (const t of tos) {
+        R[q][t] = reUnion(R[q][t], a);
+      }
+    }
+  }
+  return { states: gnfaStates.slice(), R };
+}
+
+function chooseElimOrder(gnfa, order) {
+  // interior states = all except S_NEW and F_NEW
+  const interior = gnfa.states.filter(s => s !== S_NEW && s !== F_NEW);
+  if (order === 'natural') return interior;
+  if (order === 'reverse') return interior.slice().reverse();
+  // auto: fewest non-null in + out edges
+  const score = s => {
+    let c = 0;
+    for (const p of gnfa.states) if (!isNull(gnfa.R[p][s])) c++;
+    for (const q of gnfa.states) if (!isNull(gnfa.R[s][q])) c++;
+    return c;
+  };
+  return interior.slice().sort((a, b) => score(a) - score(b));
+}
+
+function eliminateState(gnfa, rip) {
+  const newStates = gnfa.states.filter(s => s !== rip);
+  const newR = {};
+  for (const p of newStates) {
+    newR[p] = {};
+    for (const q of newStates) {
+      newR[p][q] = applyElim(gnfa.R[p][q], gnfa.R[p][rip], gnfa.R[rip][rip], gnfa.R[rip][q]);
+    }
+  }
+  return { states: newStates, R: newR };
+}
+
+function runElimination(fa, order) {
+  let gnfa = buildGNFA(fa);
+  const elimOrder = chooseElimOrder(gnfa, order);
+  const snapshots = [{ gnfa: deepCloneGNFA(gnfa), eliminated: null, updatedEdges: [], desc: 'Initial GNFA', re: null }];
+
+  for (const rip of elimOrder) {
+    // Track which edges get updated
+    const others = gnfa.states.filter(s => s !== rip);
+    const updatedEdges = [];
+    for (const p of others) {
+      for (const q of others) {
+        const before = gnfa.R[p][q];
+        const updated = applyElim(gnfa.R[p][q], gnfa.R[p][rip], gnfa.R[rip][rip], gnfa.R[rip][q]);
+        if (updated !== before) updatedEdges.push({ from: p, to: q, before, after: updated });
+      }
+    }
+    gnfa = eliminateState(gnfa, rip);
+    snapshots.push({
+      gnfa: deepCloneGNFA(gnfa),
+      eliminated: rip,
+      updatedEdges,
+      desc: `Eliminated state ${rip}`,
+      re: null,
+    });
+  }
+
+  // Final RE is R[S_NEW][F_NEW]
+  const finalRE = simplify(gnfa.R[S_NEW][F_NEW]);
+  snapshots[snapshots.length - 1].re = finalRE;
+  snapshots[snapshots.length - 1].desc = 'Final: single edge gives the RE';
+
+  return { snapshots, finalRE, elimOrder };
+}
+
+function deepCloneGNFA(gnfa) {
+  const R = {};
+  for (const p of gnfa.states) {
+    R[p] = {};
+    for (const q of gnfa.states) R[p][q] = gnfa.R[p][q];
+  }
+  return { states: gnfa.states.slice(), R };
+}
+
+/* =====================================================================
+   Presets
+   ===================================================================== */
+const PRESETS = [
+  {
+    label: 'Ends with ab',
+    fa: {
+      states: ['q0','q1','q2'],
+      alphabet: ['a','b'],
+      start: 'q0',
+      accept: ['q2'],
+      trans: { q0:{a:['q1'],b:['q0']}, q1:{a:['q1'],b:['q2']}, q2:{a:['q1'],b:['q0']} }
+    }
+  },
+  {
+    label: 'Even number of a\'s',
+    fa: {
+      states: ['q0','q1'],
+      alphabet: ['a','b'],
+      start: 'q0',
+      accept: ['q0'],
+      trans: { q0:{a:['q1'],b:['q0']}, q1:{a:['q0'],b:['q1']} }
+    }
+  },
+  {
+    label: 'Strings over {a,b} containing aa',
+    fa: {
+      states: ['q0','q1','q2'],
+      alphabet: ['a','b'],
+      start: 'q0',
+      accept: ['q2'],
+      trans: { q0:{a:['q1'],b:['q0']}, q1:{a:['q2'],b:['q0']}, q2:{a:['q2'],b:['q2']} }
+    }
+  },
+  {
+    label: 'Divisible by 3 (unary)',
+    fa: {
+      states: ['q0','q1','q2'],
+      alphabet: ['a'],
+      start: 'q0',
+      accept: ['q0'],
+      trans: { q0:{a:['q1']}, q1:{a:['q2']}, q2:{a:['q0']} }
+    }
+  },
+  {
+    label: 'Strings ending in b',
+    fa: {
+      states: ['q0','q1'],
+      alphabet: ['a','b'],
+      start: 'q0',
+      accept: ['q1'],
+      trans: { q0:{a:['q0'],b:['q1']}, q1:{a:['q0'],b:['q1']} }
+    }
+  },
+  {
+    label: '(a|b)* abb',
+    fa: {
+      states: ['q0','q1','q2','q3'],
+      alphabet: ['a','b'],
+      start: 'q0',
+      accept: ['q3'],
+      trans: {
+        q0:{a:['q1'],b:['q0']},
+        q1:{a:['q1'],b:['q2']},
+        q2:{a:['q1'],b:['q3']},
+        q3:{a:['q1'],b:['q0']}
+      }
+    }
+  }
+];
+
+/* =====================================================================
+   SVG Graph renderer for GNFA
+   ===================================================================== */
+const R_NODE = 26;
+const ARROW = 8;
+
+function mkSVGEl(tag, attrs = {}) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+class GNFAGraph {
+  constructor(svgEl) {
+    this.svg = svgEl;
+    this.nodes = {};   // id -> {x,y,el}
+    this.edges = [];   // {from,to,label,el,textEl,pathEl}
+    this.gnfa = null;
+    this.eliminatedState = null;
+    this.updatedEdgePairs = new Set();
+    this._drag = null;
+    this._pan = null;
+    this._vx = 0; this._vy = 0; this._vw = 800; this._vh = 480;
+    this._zoom = 1;
+    this._init();
+  }
+
+  _init() {
+    const svg = this.svg;
+    svg.innerHTML = '';
+    const defs = mkSVGEl('defs');
+    for (const [id, color] of [['mk','var(--edge)'],['mk-hot','var(--hot)'],['mk-re','var(--re)'],['mk-start','var(--ink-2)']]) {
+      const m = mkSVGEl('marker', { id, markerWidth:'8', markerHeight:'8', refX:'7', refY:'3', orient:'auto' });
+      const p = mkSVGEl('path', { d:'M0,0 L0,6 L8,3 z', fill: color });
+      m.appendChild(p); defs.appendChild(m);
+    }
+    svg.appendChild(defs);
+    this.layerEdges = mkSVGEl('g'); svg.appendChild(this.layerEdges);
+    this.layerNodes = mkSVGEl('g'); svg.appendChild(this.layerNodes);
+    this._setupPan();
+    this._updateViewBox();
+  }
+
+  _setupPan() {
+    const svg = this.svg;
+    let startX, startY, startVx, startVy;
+    svg.addEventListener('mousedown', e => {
+      if (e.target.closest('.node')) return;
+      this._pan = true;
+      startX = e.clientX; startY = e.clientY;
+      startVx = this._vx; startVy = this._vy;
+      svg.classList.add('panning');
+    });
+    window.addEventListener('mousemove', e => {
+      if (!this._pan) return;
+      const dx = (e.clientX - startX) / this._zoom;
+      const dy = (e.clientY - startY) / this._zoom;
+      this._vx = startVx - dx; this._vy = startVy - dy;
+      this._updateViewBox();
+    });
+    window.addEventListener('mouseup', () => { this._pan = false; svg.classList.remove('panning'); });
+    svg.addEventListener('wheel', e => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      this._zoom = Math.max(0.3, Math.min(4, this._zoom * factor));
+      this._updateViewBox();
+    }, { passive: false });
+  }
+
+  _updateViewBox() {
+    const rect = this.svg.getBoundingClientRect();
+    const w = rect.width || 800, h = rect.height || 480;
+    const vw = w / this._zoom, vh = h / this._zoom;
+    this.svg.setAttribute('viewBox', `${this._vx} ${this._vy} ${vw} ${vh}`);
+  }
+
+  layout(gnfa) {
+    const states = gnfa.states;
+    const n = states.length;
+    const rect = this.svg.getBoundingClientRect();
+    const W = rect.width || 800, H = rect.height || 480;
+    const cx = W / 2, cy = H / 2;
+    const r = Math.min(W, H) * 0.33;
+    const pos = {};
+    // Special positions for qs and qf
+    const interior = states.filter(s => s !== S_NEW && s !== F_NEW);
+    pos[S_NEW] = { x: 60, y: cy };
+    pos[F_NEW] = { x: W - 60, y: cy };
+    if (interior.length === 1) {
+      pos[interior[0]] = { x: cx, y: cy };
+    } else {
+      interior.forEach((s, i) => {
+        const angle = (2 * Math.PI * i / interior.length) - Math.PI / 2;
+        pos[s] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+      });
+    }
+    return pos;
+  }
+
+  render(gnfa, eliminatedState, updatedEdgePairs) {
+    this.gnfa = gnfa;
+    this.eliminatedState = eliminatedState;
+    this.updatedEdgePairs = updatedEdgePairs || new Set();
+    this.layerEdges.innerHTML = '';
+    this.layerNodes.innerHTML = '';
+    this.nodes = {};
+    this.edges = [];
+
+    if (!gnfa || gnfa.states.length === 0) {
+      const em = mkSVGEl('text', { x:'50%', y:'50%', 'text-anchor':'middle', 'dominant-baseline':'middle', fill:'var(--ink-3)', 'font-size':'14' });
+      em.textContent = 'No automaton defined. Add states and transitions.';
+      this.layerNodes.appendChild(em);
+      return;
+    }
+
+    // Reuse or compute positions
+    const prevPositions = {};
+    for (const [id, nd] of Object.entries(this.nodes)) prevPositions[id] = { x: nd.x, y: nd.y };
+    const layoutPos = this.layout(gnfa);
+    const pos = {};
+    for (const s of gnfa.states) {
+      pos[s] = prevPositions[s] || layoutPos[s] || { x: 200, y: 200 };
+    }
+
+    // Draw edges first
+    const edgeMap = {}; // "from->to" -> true for detecting bidirectional
+    for (const p of gnfa.states) {
+      for (const q of gnfa.states) {
+        if (!isNull(gnfa.R[p][q])) {
+          const key = p + '->' + q;
+          edgeMap[key] = true;
+        }
+      }
+    }
+    for (const p of gnfa.states) {
+      for (const q of gnfa.states) {
+        const label = gnfa.R[p][q];
+        if (isNull(label)) continue;
+        const isSelf = p === q;
+        const isBidi = p !== q && edgeMap[q + '->' + p];
+        const isElimEdge = p === eliminatedState || q === eliminatedState;
+        const updKey = p + '|' + q;
+        const isUpdated = this.updatedEdgePairs.has(updKey);
+        this._drawEdge(p, q, label, pos, isSelf, isBidi, isElimEdge, isUpdated);
+      }
+    }
+
+    // Draw nodes
+    for (const s of gnfa.states) {
+      this._drawNode(s, pos[s].x, pos[s].y, s === eliminatedState, s === S_NEW || s === F_NEW, s === F_NEW);
+    }
+
+    // Start arrow
+    if (pos[S_NEW]) {
+      const { x, y } = pos[S_NEW];
+      const arr = mkSVGEl('path', { d: `M${x-R_NODE-18},${y} L${x-R_NODE-2},${y}`, class:'start-arrow', 'marker-end':'url(#mk-start)' });
+      this.layerEdges.insertBefore(arr, this.layerEdges.firstChild);
+    }
+  }
+
+  _drawNode(id, x, y, isEliminated, isSpecial, isAccept) {
+    const g = mkSVGEl('g', { class: ['node', isEliminated ? 'being-eliminated' : '', isSpecial ? 'special' : ''].filter(Boolean).join(' '), transform: `translate(${x},${y})` });
+    const outer = mkSVGEl('circle', { class:'outer', r: R_NODE });
+    g.appendChild(outer);
+    if (isAccept) {
+      const inner = mkSVGEl('circle', { class:'inner', r: R_NODE - 4 });
+      g.appendChild(inner);
+    }
+    const label = mkSVGEl('text', { class:'nl' });
+    label.textContent = id === S_NEW ? 'qs' : id === F_NEW ? 'qf' : id;
+    g.appendChild(label);
+    this.layerNodes.appendChild(g);
+    this.nodes[id] = { x, y, el: g };
+    this._setupDrag(g, id);
+  }
+
+  _setupDrag(g, id) {
+    let startMX, startMY, startX, startY;
+    g.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      startMX = e.clientX; startMY = e.clientY;
+      startX = this.nodes[id].x; startY = this.nodes[id].y;
+      g.classList.add('dragging');
+      const onMove = e2 => {
+        const rect = this.svg.getBoundingClientRect();
+        const scale = (rect.width || 800) / (parseFloat(this.svg.getAttribute('viewBox')?.split(' ')[2]) || 800);
+        const dx = (e2.clientX - startMX) / scale;
+        const dy = (e2.clientY - startMY) / scale;
+        this.nodes[id].x = startX + dx;
+        this.nodes[id].y = startY + dy;
+        this._refreshLayout();
+      };
+      const onUp = () => {
+        g.classList.remove('dragging');
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+  }
+
+  _refreshLayout() {
+    // Re-render with current node positions
+    const pos = {};
+    for (const [id, nd] of Object.entries(this.nodes)) pos[id] = { x: nd.x, y: nd.y };
+    this.layerEdges.innerHTML = '';
+    this.layerNodes.innerHTML = '';
+    const prevNodes = { ...this.nodes };
+    this.nodes = {};
+    // Redraw edges
+    const gnfa = this.gnfa;
+    const edgeMap = {};
+    for (const p of gnfa.states) for (const q of gnfa.states) {
+      if (!isNull(gnfa.R[p][q])) edgeMap[p + '->' + q] = true;
+    }
+    for (const p of gnfa.states) for (const q of gnfa.states) {
+      const label = gnfa.R[p][q];
+      if (isNull(label)) continue;
+      const isBidi = p !== q && edgeMap[q + '->' + p];
+      const isElimEdge = p === this.eliminatedState || q === this.eliminatedState;
+      const updKey = p + '|' + q;
+      const isUpdated = this.updatedEdgePairs.has(updKey);
+      this._drawEdge(p, q, label, pos, p === q, isBidi, isElimEdge, isUpdated);
+    }
+    // Redraw nodes
+    for (const s of gnfa.states) {
+      const isE = s === this.eliminatedState;
+      const isSp = s === S_NEW || s === F_NEW;
+      const isAcc = s === F_NEW;
+      this._drawNode(s, pos[s].x, pos[s].y, isE, isSp, isAcc);
+    }
+    // Restore positions
+    for (const [id, nd] of Object.entries(prevNodes)) {
+      if (this.nodes[id]) { this.nodes[id].x = nd.x; this.nodes[id].y = nd.y; }
+    }
+    // Start arrow
+    if (pos[S_NEW]) {
+      const { x, y } = pos[S_NEW];
+      const arr = mkSVGEl('path', { d:`M${x-R_NODE-18},${y} L${x-R_NODE-2},${y}`, class:'start-arrow', 'marker-end':'url(#mk-start)' });
+      this.layerEdges.insertBefore(arr, this.layerEdges.firstChild);
+    }
+  }
+
+  _drawEdge(p, q, label, pos, isSelf, isBidi, isElim, isUpdated) {
+    const { x: x1, y: y1 } = pos[p] || { x:0, y:0 };
+    const { x: x2, y: y2 } = pos[q] || { x:0, y:0 };
+    const g = mkSVGEl('g', { class: ['edge', isElim ? 'elim' : '', isUpdated ? 'updated' : ''].filter(Boolean).join(' ') });
+    const mk = isElim ? 'url(#mk-hot)' : isUpdated ? 'url(#mk-re)' : 'url(#mk)';
+
+    let pathEl, tx, ty;
+    if (isSelf) {
+      // Self-loop above node
+      const loopR = 20;
+      pathEl = mkSVGEl('path', {
+        d: `M${x1-loopR},${y1-R_NODE} C${x1-loopR*2},${y1-R_NODE-50} ${x1+loopR*2},${y1-R_NODE-50} ${x1+loopR},${y1-R_NODE}`,
+        'marker-end': mk
+      });
+      tx = x1; ty = y1 - R_NODE - 36;
+    } else if (isBidi) {
+      // Curved arc
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.sqrt(dx*dx+dy*dy);
+      const mx = (x1+x2)/2, my = (y1+y2)/2;
+      const perp = { x: -dy/len * 32, y: dx/len * 32 };
+      const cx = mx + perp.x, cy = my + perp.y;
+      // Adjust endpoint to circle edge
+      const ex = x2 - dx/len*R_NODE, ey = y2 - dy/len*R_NODE;
+      pathEl = mkSVGEl('path', { d:`M${x1+dx/len*R_NODE},${y1+dy/len*R_NODE} Q${cx},${cy} ${ex},${ey}`, 'marker-end': mk });
+      tx = cx; ty = cy;
+    } else {
+      const dx = x2-x1, dy = y2-y1, len = Math.sqrt(dx*dx+dy*dy)||1;
+      const sx = x1+dx/len*R_NODE, sy = y1+dy/len*R_NODE;
+      const ex = x2-dx/len*(R_NODE+2), ey = y2-dy/len*(R_NODE+2);
+      pathEl = mkSVGEl('path', { d:`M${sx},${sy} L${ex},${ey}`, 'marker-end': mk });
+      tx = (sx+ex)/2; ty = (sy+ey)/2 - 8;
+    }
+
+    g.appendChild(pathEl);
+    // Label — wrap long RE
+    const shortLabel = label.length > 24 ? label.slice(0,22)+'…' : label;
+    const textEl = mkSVGEl('text', { x: tx, y: ty });
+    textEl.textContent = shortLabel;
+    textEl.setAttribute('title', label);
+    g.appendChild(textEl);
+    this.layerEdges.appendChild(g);
+  }
+
+  fitView() {
+    const rect = this.svg.getBoundingClientRect();
+    if (!rect.width) return;
+    const xs = Object.values(this.nodes).map(n => n.x);
+    const ys = Object.values(this.nodes).map(n => n.y);
+    if (!xs.length) return;
+    const minX = Math.min(...xs) - R_NODE - 30;
+    const minY = Math.min(...ys) - R_NODE - 30;
+    const maxX = Math.max(...xs) + R_NODE + 30;
+    const maxY = Math.max(...ys) + R_NODE + 30;
+    const vw = maxX - minX, vh = maxY - minY;
+    this._vx = minX; this._vy = minY;
+    this._zoom = Math.min(rect.width / vw, rect.height / vh, 2);
+    this._updateViewBox();
+  }
+}
+
+/* =====================================================================
+   Application state
+   ===================================================================== */
+let model = null;         // normalized FA
+let result = null;        // { snapshots, finalRE, elimOrder }
+let stepIdx = 0;
+let playTimer = null;
+let graph = null;
+let posCache = {};        // remember drag positions across steps
+
+const PLAY_INTERVAL = 1600;
+
+/* =====================================================================
+   Theme
+   ===================================================================== */
+let theme = recall('fare-theme') || 'auto';
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', theme === 'auto' ? '' : theme);
+  if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
+  $('#theme-label').textContent = theme === 'auto' ? 'Auto' : theme === 'dark' ? 'Dark' : 'Light';
+}
+$('#btn-theme').addEventListener('click', () => {
+  theme = theme === 'auto' ? 'dark' : theme === 'dark' ? 'light' : 'auto';
+  store('fare-theme', theme);
+  applyTheme();
+});
+applyTheme();
+
+/* =====================================================================
+   FA definition panel
+   ===================================================================== */
+let faStates = [], faAlpha = [], faTrans = {}, faStart = '', faAccept = [];
+
+function getTableFA() {
+  const states = parseList($('#in-states').value);
+  const alpha   = parseList($('#in-alpha').value);
+  const start   = parseList($('#in-states').value)[0] || '';
+  const accept  = [];
+  const trans   = {};
+  for (const q of states) {
+    trans[q] = {};
+    for (const a of alpha) {
+      const cell = $(`#cell-${CSS.escape(q)}-${CSS.escape(a)}`);
+      if (cell) trans[q][a] = parseList(cell.value);
+    }
+  }
+  // Collect checked start/accept
+  const startSel = $$('input[name="st-start"]:checked');
+  const faStartV = startSel.length ? startSel[0].value : (states[0]||'');
+  $$('input[name="st-accept"]:checked').forEach(cb => accept.push(cb.value));
+  return { states, alphabet: alpha, trans, start: faStartV, accept };
+}
+
+function buildTable() {
+  const states = parseList($('#in-states').value);
+  const alpha   = parseList($('#in-alpha').value);
+  const tbl = $('#ed-table');
+  if (!states.length || !alpha.length) { tbl.innerHTML = ''; return; }
+
+  let html = '<thead><tr><th>Start</th><th>Accept</th><th class="q">State</th>';
+  for (const a of alpha) html += `<th class="sym">${esc(a)}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const q of states) {
+    html += `<tr>`;
+    html += `<td class="c"><input type="radio" name="st-start" value="${esc(q)}" ${q===faStart?'checked':''}></td>`;
+    html += `<td class="c"><input type="checkbox" name="st-accept" value="${esc(q)}" ${faAccept.includes(q)?'checked':''}></td>`;
+    html += `<th class="q">${esc(q)}</th>`;
+    for (const a of alpha) {
+      const val = ((faTrans[q]||{})[a]||[]).join(', ');
+      html += `<td><input class="cell" id="cell-${esc(q)}-${esc(a)}" value="${esc(val)}" autocomplete="off" spellcheck="false" placeholder="∅"></td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody>';
+  tbl.innerHTML = html;
+  $$('input.cell', tbl).forEach(inp => inp.addEventListener('input', debounce(onDefChange, 400)));
+  $$('input[name="st-start"],input[name="st-accept"]', tbl).forEach(inp => inp.addEventListener('change', onDefChange));
+}
+
+function onDefChange() {
+  const m = getTableFA();
+  faStates  = m.states;
+  faAlpha   = m.alphabet;
+  faTrans   = m.trans;
+  faStart   = m.start;
+  faAccept  = m.accept;
+  saveFA();
+}
+
+$('#in-states').addEventListener('input', debounce(() => { buildTable(); onDefChange(); }, 300));
+$('#in-alpha').addEventListener('input', debounce(() => { buildTable(); onDefChange(); }, 300));
+
+// Input tabs
+$$('#input-tabs [role="tab"]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('#input-tabs [role="tab"]').forEach(b => b.setAttribute('aria-selected','false'));
+    btn.setAttribute('aria-selected','true');
+    const tab = btn.dataset.tab;
+    $('#in-table').hidden = tab !== 'table';
+    $('#in-text').hidden  = tab !== 'text';
+    if (tab === 'text') syncTextArea();
+  });
+});
+
+function syncTextArea() {
+  if (!model) return;
+  $('#txt-def').value = faToText(model);
+}
+
+$('#txt-def').addEventListener('input', debounce(() => {
+  const raw = $('#txt-def').value;
+  try {
+    const parsed = parseTextDef(raw);
+    model = normalizeFA(parsed);
+    faStates = model.states; faAlpha = model.alphabet;
+    faTrans = model.trans; faStart = model.start; faAccept = model.accept;
+    $('#in-states').value = model.states.join(', ');
+    $('#in-alpha').value  = model.alphabet.join(', ');
+    buildTable();
+    showMsg('ok','Parsed successfully.');
+    saveFA();
+  } catch (e) {
+    showMsg('err','Parse error: ' + e.message);
+  }
+}, 400));
+
+$('#txt-copy').addEventListener('click', () => { syncTextArea(); navigator.clipboard.writeText($('#txt-def').value).then(() => toast('Copied!')); });
+$('#txt-json').addEventListener('click', () => { navigator.clipboard.writeText(JSON.stringify(model,null,2)).then(() => toast('Copied JSON!')); });
+
+// Presets
+(function populatePresets() {
+  const sel = $('#preset');
+  sel.innerHTML = '<option value="">— choose an example —</option>';
+  PRESETS.forEach((p, i) => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = p.label;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', () => {
+    const idx = parseInt(sel.value);
+    if (isNaN(idx)) return;
+    const p = PRESETS[idx];
+    loadFA(p.fa);
+    sel.value = idx;
+  });
+})();
+
+function loadFA(fa) {
+  model = normalizeFA(fa);
+  faStates = model.states; faAlpha = model.alphabet;
+  faTrans = model.trans; faStart = model.start; faAccept = model.accept;
+  $('#in-states').value = model.states.join(', ');
+  $('#in-alpha').value  = model.alphabet.join(', ');
+  posCache = {};
+  buildTable();
+  renderSummary();
+  drawInitialFA();
+  saveFA();
+}
+
+function saveFA() {
+  if (model) store('fare-fa', { states:faStates,alphabet:faAlpha,trans:faTrans,start:faStart,accept:faAccept });
+}
+
+function drawInitialFA() {
+  if (!model || !graph) return;
+  // Build a lightweight GNFA just to draw the original FA
+  const gnfa = buildGNFA(model);
+  graph.render(gnfa, null, new Set());
+  graph.fitView();
+  renderSummary();
+}
+
+/* =====================================================================
+   Convert button
+   ===================================================================== */
+$('#btn-convert').addEventListener('click', () => {
+  const m = (() => {
+    const tab = $$('#input-tabs [role="tab"]').find(b => b.getAttribute('aria-selected')==='true');
+    if (tab && tab.dataset.tab === 'text') {
+      try { return normalizeFA(parseTextDef($('#txt-def').value)); }
+      catch(e) { showMsg('err','Parse error: ' + e.message); return null; }
+    }
+    return normalizeFA(getTableFA());
+  })();
+  if (!m) return;
+  if (!m.states.length) { showMsg('err','No states defined.'); return; }
+  if (!m.start) { showMsg('err','No start state.'); return; }
+  if (!m.accept.length) { showMsg('warn','No accepting states — the RE will be ∅.'); }
+
+  model = m;
+  faStates = m.states; faAlpha = m.alphabet; faTrans = m.trans; faStart = m.start; faAccept = m.accept;
+  buildTable();
+  saveFA();
+
+  const order = $('#elim-order').value;
+  result = runElimination(model, order);
+  stepIdx = 0;
+  posCache = {};
+
+  renderSummary();
+  renderAllTabs();
+  updateStep();
+  showMsg('ok', `Conversion complete! ${result.elimOrder.length} state(s) eliminated. RE: ${result.finalRE}`);
+});
+
+$('#btn-reset-fa').addEventListener('click', () => {
+  model = null; result = null; stepIdx = 0;
+  $('#in-states').value = ''; $('#in-alpha').value = '';
+  faStates=[]; faAlpha=[]; faTrans={}; faStart=''; faAccept=[];
+  buildTable();
+  renderSummary();
+  if (graph) graph.render({ states:[], R:{} }, null, new Set());
+  $('#st-explain').innerHTML = '';
+  $('#elim-steps-list').innerHTML = '';
+  $('#gnfa-table-container').innerHTML = '';
+  $('#re-expr').textContent = 'Run the conversion first';
+  $('#re-expr').className = 're-expr empty';
+  $('#trace-body').innerHTML = '';
+  $('#formal-out').innerHTML = '';
+  clearMsgs();
+});
+
+/* =====================================================================
+   Step player
+   ===================================================================== */
+$('#st-first').addEventListener('click', () => { stepIdx = 0; updateStep(); });
+$('#st-prev').addEventListener('click',  () => { stepIdx = Math.max(0, stepIdx - 1); updateStep(); });
+$('#st-next').addEventListener('click',  () => { stepIdx = Math.min(maxStep(), stepIdx + 1); updateStep(); });
+$('#st-last').addEventListener('click',  () => { stepIdx = maxStep(); updateStep(); });
+$('#st-range').addEventListener('input', () => { stepIdx = parseInt($('#st-range').value); updateStep(); });
+$('#st-play').addEventListener('click',  togglePlay);
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'ArrowLeft')  { stepIdx = Math.max(0, stepIdx-1); updateStep(); }
+  if (e.key === 'ArrowRight') { stepIdx = Math.min(maxStep(), stepIdx+1); updateStep(); }
+  if (e.key === ' ')          { e.preventDefault(); togglePlay(); }
+});
+
+function maxStep() { return result ? result.snapshots.length - 1 : 0; }
+
+function togglePlay() {
+  if (playTimer) {
+    clearInterval(playTimer);
+    playTimer = null;
+    const btn = $('#st-play');
+    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11L13 8z"/></svg><span>Play</span>';
+  } else {
+    if (stepIdx >= maxStep()) stepIdx = 0;
+    const btn = $('#st-play');
+    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3h2v10H5zM9 3h2v10H9z"/></svg><span>Pause</span>';
+    playTimer = setInterval(() => {
+      if (stepIdx >= maxStep()) { togglePlay(); return; }
+      stepIdx++;
+      updateStep();
+    }, reduceMotion() ? 400 : PLAY_INTERVAL);
+  }
+}
+
+function updateStep() {
+  if (!result) return;
+  const snap = result.snapshots[stepIdx];
+  $('#st-range').max = maxStep();
+  $('#st-range').value = stepIdx;
+  $('#st-count').textContent = `${stepIdx + 1} / ${result.snapshots.length}`;
+
+  // Render GNFA
+  const updSet = new Set();
+  for (const ue of (snap.updatedEdges || [])) updSet.add(ue.from + '|' + ue.to);
+  graph.render(snap.gnfa, snap.eliminated, updSet);
+  graph.fitView();
+
+  // Explain box
+  renderStepExplain(snap, stepIdx);
+
+  // Highlight step in list
+  $$('#elim-steps-list .elim-step').forEach((li, i) => {
+    li.classList.toggle('current', i === stepIdx);
+    li.classList.toggle('done', i < stepIdx);
+  });
+
+  // Update GNFA table
+  renderGNFATable(snap.gnfa, snap.eliminated, updSet);
+}
+
+function renderStepExplain(snap, idx) {
+  const el = $('#st-explain');
+  if (idx === 0) {
+    el.innerHTML = `<div class="step-head"><span class="sbadge special">Init</span><b>Build initial GNFA</b></div>
+    <span class="k">Add:</span> new start state <b>qs</b> with ε-edge to <b>${esc(model.start)}</b><br>
+    <span class="k">Add:</span> new accept state <b>qf</b> with ε-edges from each original accept state<br>
+    <span class="k">States:</span> ${snap.gnfa.states.map(s => '<b>'+esc(s)+'</b>').join(', ')}<br>
+    <span class="k">Total:</span> ${snap.gnfa.states.length} states in GNFA`;
+    return;
+  }
+  const rip = snap.eliminated;
+  let html = `<div class="step-head"><span class="sbadge elim">Elim</span><b>Eliminate state <span style="color:var(--hot)">${esc(rip)}</span></b></div>`;
+  html += `<span class="k">Formula:</span><span class="eq">R(i,j) ← R(i,j) | R(i,${esc(rip)}) · R(${esc(rip)},${esc(rip)})* · R(${esc(rip)},j)</span>`;
+  if (snap.updatedEdges && snap.updatedEdges.length) {
+    html += `<span class="k" style="margin-top:8px;display:block">Updated edges (${snap.updatedEdges.length}):</span>`;
+    for (const ue of snap.updatedEdges.slice(0, 6)) {
+      html += `<span class="eq" style="font-size:12px">${esc(ue.from)}→${esc(ue.to)}: <span style="color:var(--ink-3)">${esc(ue.before||'∅')}</span> → <span style="color:var(--re);font-weight:700">${esc(ue.after)}</span></span>`;
+    }
+    if (snap.updatedEdges.length > 6) html += `<span style="color:var(--ink-3);font-size:12px">…and ${snap.updatedEdges.length - 6} more</span>`;
+  } else {
+    html += `<span style="color:var(--ink-3)">No edges updated (state had no useful paths)</span>`;
+  }
+  if (snap.re) {
+    html += `<span class="re-result" style="margin-top:10px;display:block">🎯 Final RE: ${esc(snap.re)}</span>`;
+  }
+  el.innerHTML = html;
+}
+
+/* =====================================================================
+   Summary
+   ===================================================================== */
+function renderSummary() {
+  const el = $('#summary');
+  if (!model) { el.innerHTML = ''; return; }
+  const nStates = model.states.length;
+  const nAccept = model.accept.length;
+  const nInterior = nStates; // all FA states become interior in GNFA
+  const finalRE = result ? result.finalRE : '—';
+  el.innerHTML = `<div class="pipeline">
+    <div class="pipe">
+      <div class="pstage fa">
+        <span class="k">FA</span>
+        <span class="v">${nStates} <small>states</small></span>
+        <span class="d">${nAccept} accept · |Σ|=${model.alphabet.length}</span>
+      </div>
+      <div class="parrow">
+        <svg viewBox="0 0 44 10"><path d="M0,5 L38,5" stroke="currentColor" stroke-width="1.5"/><path d="M34,1 L44,5 L34,9" fill="currentColor"/></svg>
+        <span class="pl">State elim<br>${nInterior} states</span>
+      </div>
+      <div class="pstage gnfa">
+        <span class="k">GNFA</span>
+        <span class="v">${nStates+2} <small>states</small></span>
+        <span class="d">+qs +qf · ${nInterior} to eliminate</span>
+      </div>
+      <div class="parrow">
+        <svg viewBox="0 0 44 10"><path d="M0,5 L38,5" stroke="currentColor" stroke-width="1.5"/><path d="M34,1 L44,5 L34,9" fill="currentColor"/></svg>
+        <span class="pl">Final edge</span>
+      </div>
+      <div class="pstage re">
+        <span class="k">RE</span>
+        <span class="v" style="font-size:${result?'14':'26'}px;line-height:1.3;word-break:break-all">${esc(finalRE)}</span>
+        <span class="d">${result?'regular expression':'not yet converted'}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* =====================================================================
+   Render all analysis tabs
+   ===================================================================== */
+function renderAllTabs() {
+  if (!result) return;
+  renderStepsList();
+  renderResultTab();
+  renderFormalTab();
+}
+
+function renderStepsList() {
+  const list = $('#elim-steps-list');
+  list.innerHTML = '';
+  result.snapshots.forEach((snap, i) => {
+    const li = document.createElement('li');
+    li.className = 'elim-step';
+    if (i === 0) {
+      li.innerHTML = `<span class="est">Step 0</span><span class="enode">Build GNFA</span><span class="eupd">Add qs and qf, copy FA transitions</span>`;
+    } else {
+      const rip = snap.eliminated;
+      const nUpd = (snap.updatedEdges||[]).length;
+      li.innerHTML = `<span class="est">Step ${i}</span><span class="enode">Eliminate ${esc(rip)}</span><span class="eupd">${nUpd} edge(s) updated</span>`;
+    }
+    li.addEventListener('click', () => { stepIdx = i; updateStep(); });
+    list.appendChild(li);
+  });
+}
+
+function renderGNFATable(gnfa, elimState, updSet) {
+  const container = $('#gnfa-table-container');
+  const states = gnfa.states;
+  let html = `<div class="gnfa-tbl-wrap"><table class="gnfa-tbl"><thead><tr><th>from \\ to</th>`;
+  for (const q of states) html += `<th class="${q===elimState?'elim-col':''}">${esc(q==='qs'?'qs':q==='qf'?'qf':q)}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const p of states) {
+    html += `<tr class="${p===elimState?'elim-row':''}"><th>${esc(p==='qs'?'qs':p==='qf'?'qf':p)}</th>`;
+    for (const q of states) {
+      const val = gnfa.R[p][q];
+      const upd = updSet.has(p+'|'+q);
+      html += `<td class="${upd?'updated':''}">${esc(isNull(val)?'∅':val)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+function renderResultTab() {
+  const re = result.finalRE;
+  const expr = $('#re-expr');
+  expr.textContent = re;
+  expr.className = 're-expr' + (isNull(re) ? ' empty' : '');
+
+  const tbody = $('#trace-body');
+  tbody.innerHTML = '';
+  result.snapshots.forEach((snap, i) => {
+    if (i === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>0</td><td>—</td><td>Build GNFA</td><td>${snap.gnfa.states.length}</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i}</td><td>${esc(snap.eliminated)}</td><td>${(snap.updatedEdges||[]).length} edge(s)</td><td>${snap.gnfa.states.length}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderFormalTab() {
+  if (!model) return;
+  const el = $('#formal-out');
+  const acc = model.accept.join(', ') || '∅';
+  el.innerHTML = `
+  <div class="formal-block">
+    <h4><span class="tag is-fa" style="--g:var(--fa);--g-soft:var(--fa-soft)">FA</span> Input finite automaton</h4>
+    <dl class="formal">
+      <dt>Q</dt><dd>{ ${model.states.map(esc).join(', ')} }</dd>
+      <dt>Σ</dt><dd>{ ${model.alphabet.map(esc).join(', ')} }</dd>
+      <dt>q₀</dt><dd>${esc(model.start)}</dd>
+      <dt>F</dt><dd>{ ${esc(acc)} }</dd>
+      <dt>δ</dt><dd>${renderDeltaFormal()}</dd>
+    </dl>
+  </div>
+  ${result ? `<div class="formal-block" style="margin-top:14px">
+    <h4><span class="tag" style="--g:var(--re);--g-soft:var(--re-soft)">RE</span> Resulting regular expression</h4>
+    <dl class="formal">
+      <dt>L(M)</dt><dd style="font-family:var(--font-mono);color:var(--re);font-weight:600;overflow-wrap:anywhere">${esc(result.finalRE)}</dd>
+      <dt>Method</dt><dd>State elimination on GNFA (${result.elimOrder.length} state(s) eliminated)</dd>
+      <dt>Order</dt><dd>${result.elimOrder.map(esc).join(' → ')}</dd>
+    </dl>
+  </div>` : ''}`;
+}
+
+function renderDeltaFormal() {
+  if (!model) return '';
+  const rows = [];
+  for (const q of model.states) {
+    for (const a of model.alphabet) {
+      const tos = (model.trans[q] || {})[a] || [];
+      if (tos.length) rows.push(`δ(${q}, ${a}) = ${tos.join(', ')}`);
+    }
+  }
+  return rows.length ? rows.map(esc).join('<br>') : '—';
+}
+
+/* =====================================================================
+   Copy buttons
+   ===================================================================== */
+$('#copy-re').addEventListener('click', () => {
+  if (!result) return;
+  navigator.clipboard.writeText(result.finalRE).then(() => toast('RE copied!'));
+});
+$('#copy-re-clean').addEventListener('click', () => {
+  if (!result) return;
+  navigator.clipboard.writeText(simplify(result.finalRE)).then(() => toast('Simplified RE copied!'));
+});
+
+/* =====================================================================
+   Tabs
+   ===================================================================== */
+$$('#main-tabs [role="tab"]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('#main-tabs [role="tab"]').forEach(b => b.setAttribute('aria-selected','false'));
+    btn.setAttribute('aria-selected','true');
+    const tab = btn.dataset.tab;
+    $('#tab-steps').hidden      = tab !== 'steps';
+    $('#tab-gnfa-tbl').hidden   = tab !== 'gnfa-tbl';
+    $('#tab-result').hidden     = tab !== 'result';
+    $('#tab-formal').hidden     = tab !== 'formal';
+    if (tab === 'gnfa-tbl' && result) {
+      const snap = result.snapshots[stepIdx];
+      const updSet = new Set((snap.updatedEdges||[]).map(e => e.from+'|'+e.to));
+      renderGNFATable(snap.gnfa, snap.eliminated, updSet);
+    }
+    if (tab === 'formal') renderFormalTab();
+  });
+});
+
+/* =====================================================================
+   Expand / fullscreen graph
+   ===================================================================== */
+function setupExpand(card, svg) {
+  const btn = document.createElement('button');
+  btn.className = 'icon';
+  btn.setAttribute('aria-label','Expand diagram');
+  btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3"/></svg>';
+  btn.addEventListener('click', () => {
+    const expanded = card.classList.toggle('expanded');
+    $('#backdrop').hidden = !expanded;
+    btn.innerHTML = expanded
+      ? '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3v3H3M13 6h-3V3M10 13v-3h3M3 10h3v3"/></svg>'
+      : '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3"/></svg>';
+    setTimeout(() => { if (graph) graph.fitView(); }, 50);
+  });
+  $('#backdrop').addEventListener('click', () => {
+    card.classList.remove('expanded');
+    $('#backdrop').hidden = true;
+    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3"/></svg>';
+  });
+  return btn;
+}
+
+(function initGraphTools() {
+  const card = document.querySelector('.graph-card.is-gnfa');
+  const tools = $('#gnfa-tools');
+  tools.appendChild(setupExpand(card, $('#svg-gnfa')));
+  // Fit button
+  const fitBtn = document.createElement('button');
+  fitBtn.textContent = 'Fit'; fitBtn.className = 'icon';
+  fitBtn.setAttribute('title','Fit to view');
+  fitBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8h6M8 5v6"/></svg>';
+  fitBtn.addEventListener('click', () => { if (graph) graph.fitView(); });
+  tools.appendChild(fitBtn);
+})();
+
+/* =====================================================================
+   Messages / toast
+   ===================================================================== */
+function showMsg(type, text) {
+  const c = $('#msgs');
+  c.innerHTML = `<div class="msg ${type}">${esc(text)}</div>`;
+}
+function clearMsgs() { $('#msgs').innerHTML = ''; }
+
+let toastTimer;
+function toast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+/* =====================================================================
+   Init graph & load saved FA
+   ===================================================================== */
+graph = new GNFAGraph($('#svg-gnfa'));
+
+(function init() {
+  const saved = recall('fare-fa');
+  if (saved) {
+    try {
+      loadFA(saved);
+    } catch (e) { /* ignore */ }
+  } else {
+    loadFA(PRESETS[0].fa);
+  }
+})();
+
+})(); // end IIFE
+</script>
