@@ -9,19 +9,19 @@
 <meta name="description" content="Convert any FA (DFA or NFA) to a Regular Expression using the State Elimination method. Step-by-step GNFA construction, elimination order, and final regex derivation.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
 <style>
 /* Layout: definition panel left; center GNFA canvas; right tabbed analysis panel */
 :root{
-  --bg:#F3EBDD; --surface:#FFFBF4; --surface-2:#EBE1D2; --line:#D6C9B6; --line-2:#BFAE97;
-  --ink:#2A241C; --ink-2:#5C5348; --ink-3:#8A7F70;
-  --canvas:#FAF4EA; --dot:#E0D4C4; --edge:#6B6155;
-  --fa:#0B7A6F; --fa-soft:#DCEEE8;
-  --re:#7C3AED; --re-soft:#EDE6F8;
-  --hot:#C95F05; --hot-soft:#F6E2C8;
-  --ok:#157A3A; --ok-soft:#DCF2E3; --bad:#B93228; --bad-soft:#FBE3E0; --warn:#8A5B00; --warn-soft:#F7E8C8;
-  --focus:#7C3AED;
-  --shadow:0 1px 2px rgba(42,36,28,.06), 0 6px 20px rgba(42,36,28,.05);
+  --bg:#E8DCC8; --surface:#F7F0E4; --surface-2:#DDD0BA; --line:#C9B79A; --line-2:#A89478;
+  --ink:#1A1510; --ink-2:#4A4034; --ink-3:#7A6D5C;
+  --canvas:#F3EADF; --dot:#D4C4AE; --edge:#5A4E40;
+  --fa:#0A6B5F; --fa-soft:#CDE5DF;
+  --re:#6D28D9; --re-soft:#E4D9F7;
+  --hot:#B45309; --hot-soft:#F0D7B4;
+  --ok:#166534; --ok-soft:#D4ECDC; --bad:#B91C1C; --bad-soft:#F6D9D6; --warn:#92400E; --warn-soft:#F0E0C0;
+  --focus:#6D28D9;
+  --shadow:0 2px 4px rgba(26,21,16,.07), 0 10px 28px rgba(26,21,16,.08);
   --font-display:"Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-body:"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -52,27 +52,36 @@
 [hidden]{display:none!important}
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:400 14px/1.5 var(--font-body)}
-h1,h2,h3,h4{font-family:var(--font-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+body{
+  margin:0;color:var(--ink);font:400 14px/1.5 var(--font-body);
+  background:
+    radial-gradient(900px 420px at 8% -12%, rgba(180,83,9,.14), transparent 55%),
+    radial-gradient(700px 380px at 96% 0%, rgba(109,40,217,.10), transparent 50%),
+    linear-gradient(180deg, #EFE4D2 0%, var(--bg) 45%, #E0D2BC 100%);
+  min-height:100vh;
+}
+h1,h2,h3,h4{font-family:var(--font-display);text-wrap:balance;margin:0;letter-spacing:-.02em;font-weight:700;color:var(--ink)}
 code,.mono{font-family:var(--font-mono)}
 a{color:var(--re)}
 .wrap{max-width:1500px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 
 /* top bar */
-.topbar{background:var(--surface);border-bottom:1px solid var(--line)}
-.topbar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:12px}
+.topbar{background:color-mix(in srgb,var(--surface) 92%, transparent);border-bottom:1px solid var(--line);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.topbar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:14px}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}
 .brand svg{flex:none}
-.brand h1{font-size:20px;font-weight:700;line-height:1.15}
-.brand p{margin:1px 0 0;color:var(--ink-3);font-size:13px}
+.brand h1{font-size:24px;font-weight:700;line-height:1.1;letter-spacing:-.03em}
+.brand h1 .arrow{color:var(--hot);margin:0 .06em}
+.brand h1 .re{color:var(--re)}
+.brand p{margin:3px 0 0;color:var(--ink-2);font-size:13px;font-weight:500}
 .top-actions{display:flex;gap:8px;align-items:center}
 
 /* controls */
-button{font:500 13px/1 var(--font-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:0 11px;min-height:32px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+button{font:600 13px/1 var(--font-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:0 11px;min-height:32px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
 button:hover{border-color:var(--line-2);background:var(--surface-2)}
 button:disabled{opacity:.45;cursor:not-allowed}
-button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-button.primary:hover{opacity:.9;background:var(--ink)}
+button.primary{background:var(--ink);color:#F7F0E4;border-color:var(--ink);box-shadow:0 6px 16px rgba(26,21,16,.18)}
+button.primary:hover{opacity:.92;background:var(--ink)}
 button.icon{width:32px;padding:0}
 button svg{width:16px;height:16px;flex:none}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
@@ -113,8 +122,8 @@ label.check{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:
 /* definition panel */
 .define{padding:16px;display:flex;flex-direction:column;gap:14px}
 .define-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.define-head h2{font-size:16px}
-.tuple{font:500 13px var(--font-mono);color:var(--ink-3)}
+.define-head h2{font-size:18px;font-weight:700}
+.tuple{font:600 13px var(--font-mono);color:var(--ink-2)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .edit-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
 table.edit{border-collapse:collapse;width:100%;font-size:13px}
@@ -210,10 +219,10 @@ details.help pre{background:var(--surface-2);border-radius:8px;padding:10px;font
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 10px;overflow-x:auto;scrollbar-width:thin}
 .tabs button{border:0;border-radius:0;background:none;border-bottom:2px solid transparent;padding:0 12px;min-height:46px;color:var(--ink-3);font-weight:600;font-size:13.5px}
 .tabs button:hover{color:var(--ink);background:none}
-.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.tabs button[aria-selected="true"]{color:var(--hot);border-bottom-color:var(--hot)}
 .tab-body{padding:16px;display:flex;flex-direction:column;gap:16px;min-width:0}
-.tab-body h4{font-size:14px}
-.lede{margin:0;color:var(--ink-2);max-width:78ch}
+.tab-body h4{font-size:15px;font-weight:700}
+.lede{margin:0;color:var(--ink-2);max-width:78ch;font-weight:500}
 
 .table-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--line);border-radius:10px}
 table.data{border-collapse:collapse;font:500 13px var(--font-mono);width:100%}
@@ -242,7 +251,7 @@ table.data td.muted,table.data .muted{color:var(--ink-3)}
 /* RE display */
 .re-box{background:var(--re-soft);border:1.5px solid color-mix(in srgb,var(--re) 35%,transparent);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
 .re-box .re-label{font:600 11px var(--font-body);letter-spacing:.07em;text-transform:uppercase;color:var(--re)}
-.re-box .re-expr{font:600 16px/1.5 var(--font-mono);color:var(--ink);overflow-wrap:anywhere;word-break:break-all}
+.re-box .re-expr{font:700 17px/1.5 var(--font-mono);color:var(--ink);overflow-wrap:anywhere;word-break:break-all}
 .re-box .re-expr.empty{color:var(--ink-3);font-weight:400;font-size:14px}
 .copy-btn{align-self:flex-start}
 
@@ -295,7 +304,7 @@ dl.formal dd{margin:0;overflow-wrap:anywhere}
         <text x="27" y="23" font-size="10" font-family="monospace" font-weight="700" fill="var(--re)" text-anchor="middle">RE</text>
       </svg>
       <div>
-        <h1>FA→RE Studio</h1>
+        <h1>FA<span class="arrow">→</span><span class="re">RE</span> Studio</h1>
         <p>State elimination method: convert any FA to a Regular Expression</p>
       </div>
     </div>
