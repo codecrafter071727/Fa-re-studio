@@ -294,9 +294,9 @@ dl.formal dd{margin:0;overflow-wrap:anywhere}
       </div>
     </div>
     <div class="top-actions">
-      <button id="btn-theme" type="button" aria-label="Switch colour theme" title="Theme: system">
+      <button id="btn-theme" type="button" aria-label="Switch colour theme" title="Theme: light">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg>
-        <span id="theme-label">Auto</span>
+        <span id="theme-label">Light</span>
       </button>
     </div>
   </div>
@@ -1110,14 +1110,15 @@ const PLAY_INTERVAL = 1600;
 /* =====================================================================
    Theme
    ===================================================================== */
-let theme = recall('fare-theme') || 'auto';
+let theme = recall('fare-theme') || 'light';
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', theme === 'auto' ? '' : theme);
   if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
   $('#theme-label').textContent = theme === 'auto' ? 'Auto' : theme === 'dark' ? 'Dark' : 'Light';
+  $('#btn-theme').title = 'Theme: ' + (theme === 'auto' ? 'system' : theme);
 }
 $('#btn-theme').addEventListener('click', () => {
-  theme = theme === 'auto' ? 'dark' : theme === 'dark' ? 'light' : 'auto';
+  theme = theme === 'light' ? 'dark' : theme === 'dark' ? 'auto' : 'light';
   store('fare-theme', theme);
   applyTheme();
 });
